@@ -52,7 +52,7 @@ def login() -> str:
     password = request.args.get('password')
 
     cur = db.cursor()
-    cur.execute(f'SELECT id FROM users WHERE password="{password}" AND email="{email}"');
+    cur.execute(f'SELECT id FROM users WHERE password="{password}" AND email="{email}"')
     
 
     for (id) in cur:
@@ -62,7 +62,7 @@ def login() -> str:
 def user_exists(id: str) -> bool:
     cur = db.cursor()
 
-    cur.execute('SELECT * FROM users WHERE id= %s', id)
+    cur.execute(f'SELECT * FROM users WHERE id={id}')
     row = cur.fetchone()
     
     # not sure if i can call #close() before checking result
@@ -81,7 +81,7 @@ def fetch_stats(id: str):
         abort(404)
     
     cur = db.cursor()
-    cur.execute("SELECT water, power, co2 FROM stats WHERE id = %s", id)
+    cur.execute(f"SELECT water, power, co2 FROM stats WHERE id = {id}")
     result = cur.fetchone()
 
     while result is not None:
