@@ -1,20 +1,28 @@
+from time import time
 import uuid
 from flask import Flask, abort, request, jsonify
 import mysql.connector
+from _mysql_connector import Error
 import os
 from dotenv import load_dotenv
 
 app = Flask(__name__)
 load_dotenv('.env')
 
-def get_db():
-    return mysql.connector.connect(
-        host=os.getenv('MYSQLHOST'),
-        port=int(os.getenv('MYSQLPORT', 3306)),
-        user=os.getenv('MYSQLUSER'),
-        password=os.getenv('MYSQLPASSWORD'),
-        database=os.getenv('MYSQLDATABASE')
-    )
+def get_db(retries=3):
+    for _ in range(retries):
+        try:
+            return mysql.connector.connect(
+                host=os.getenv('MYSQLHOST'),
+                port=int(os.getenv('MYSQLPORT', 3306)),
+                user=os.getenv('MYSQLUSER'),
+                password=os.getenv('MYSQLPASSWORD'),
+                database=os.getenv('MYSQLDATABASE'),
+                connection_timeout=5
+            )
+        except Error as e:
+            last_error = e
+            time.sleep(1)
 
 def createTables():
     db = get_db()
