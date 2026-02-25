@@ -1,4 +1,4 @@
-from time import time
+import time
 import uuid
 from flask import Flask, abort, request, jsonify
 import mysql.connector
