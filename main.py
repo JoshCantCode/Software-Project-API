@@ -2,7 +2,6 @@ from time import time
 import uuid
 from flask import Flask, abort, request, jsonify
 import mysql.connector
-from _mysql_connector import Error
 import os
 from dotenv import load_dotenv
 
