@@ -1,77 +1,101 @@
 import uuid
-from flask import Flask, abort, request
+from flask import Flask, abort, request, jsonify
 import mysql.connector
 import os
 from dotenv import load_dotenv
 
-
 app = Flask(__name__)
 load_dotenv('.env')
-db = mysql.connector.connect(
-    host=os.getenv('MYSQLHOST'),
-    port=int(os.getenv('MYSQLPORT', 3306)),
-    user=os.getenv('MYSQLUSER'),
-    password=os.getenv('MYSQLPASSWORD'),
-    database=os.getenv('MYSQLDATABASE')
-)
+
+def get_db():
+    return mysql.connector.connect(
+        host=os.getenv('MYSQLHOST'),
+        port=int(os.getenv('MYSQLPORT', 3306)),
+        user=os.getenv('MYSQLUSER'),
+        password=os.getenv('MYSQLPASSWORD'),
+        database=os.getenv('MYSQLDATABASE')
+    )
 
 def createTables():
+    db = get_db()
     cur = db.cursor()
 
-    cur.execute(f'CREATE TABLE IF NOT EXISTS users (id INT, email TEXT, password TEXT, PRIMARY KEY (id))')
-    cur.execute(f'CREATE TABLE IF NOT EXISTS stats (id INT water INT, co2 INT, power INT, PRIMARY KEY (id), FOREIGN KEY (id) REFERENCES users(id)')
+    cur.execute(
+        'CREATE TABLE IF NOT EXISTS users (id CHAR(36), email TEXT, password TEXT, PRIMARY KEY (id))'
+    )
+    cur.execute(
+        'CREATE TABLE IF NOT EXISTS stats (id CHAR(36), water INT, co2 INT, power INT, PRIMARY KEY (id), FOREIGN KEY (id) REFERENCES users(id))'
+    )
+    cur.execute(
+        'CREATE TABLE IF NOT EXISTS saved_stats (id CHAR(36), water INT, co2 INT, power INT, PRIMARY KEY (id), FOREIGN KEY (id) REFERENCES users(id))'
+    )
 
     db.commit()
     cur.close()
+    db.close()
 
     return
+
+createTables()
+
+def user_exists(id: str) -> bool:
+    db = get_db()
+    cur = db.cursor()
+
+    cur.execute('SELECT 1 FROM users WHERE id = %s', (id,))
+    row = cur.fetchone()
+
+    # not sure if i can call #close() before checking result
+    cur.close()
+    db.close()
+
+    return row is not None
 
 
 @app.route('/register', methods=['POST'])
 def register():
-    email = request.args.get('email')
-    password = request.args.get('password')
+    email = request.json.get('email')
+    password = request.json.get('password')
 
     # User exists already
-    if user_exists(id):
+    randomId = str(uuid.uuid4())
+    if user_exists(randomId):
         abort(404)
 
-    randomId = uuid.uuid4()
-
+    db = get_db()
     cur = db.cursor()
-    cur.execute(f'INSERT INTO users (id, email, password) VALUES ({randomId}, {email}, {password})')
+    cur.execute(
+        'INSERT INTO users (id, email, password) VALUES (%s, %s, %s)',
+        (randomId, email, password)
+    )
     db.commit()
     cur.close()
+    db.close()
 
-    # return the id so we can save it in local storage 
-    return randomId
+    # return the id so we can save it in local storage
+    return jsonify(randomId)
+
 
 @app.route('/login', methods=['POST'])
 def login() -> str:
-    email = request.args.get('email')
-    password = request.args.get('password')
+    email = request.json.get('email')
+    password = request.json.get('password')
 
+    db = get_db()
     cur = db.cursor()
-    cur.execute(f'SELECT id FROM users WHERE password="{password}" AND email="{email}"')
-    
+    cur.execute(
+        'SELECT id FROM users WHERE password = %s AND email = %s',
+        (password, email)
+    )
 
-    for (id) in cur:
-        cur.close()
-        return id
-
-def user_exists(id: str) -> bool:
-    cur = db.cursor()
-
-    cur.execute(f'SELECT * FROM users WHERE id={id}')
     row = cur.fetchone()
-    
-    # not sure if i can call #close() before checking result
-    while row is not None:
-        cur.close()
-        return True
-
     cur.close()
-    return False
+    db.close()
+
+    if row is None:
+        abort(404)
+
+    return jsonify(row[0])
 
 
 @app.route('/stats/<id>', methods=['GET'])
@@ -79,13 +103,19 @@ def fetch_stats(id: str):
 
     if not user_exists(id):
         abort(404)
-    
+
+    db = get_db()
     cur = db.cursor()
-    cur.execute(f"SELECT water, power, co2 FROM stats WHERE id = {id}")
+    cur.execute(
+        'SELECT water, power, co2 FROM stats WHERE id = %s',
+        (id,)
+    )
     result = cur.fetchone()
 
+    cur.close()
+    db.close()
+
     while result is not None:
-        cur.close()
         return {
             "water": result[0],
             "power": result[1],
