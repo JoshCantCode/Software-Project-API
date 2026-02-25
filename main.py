@@ -10,7 +10,7 @@ app = Flask(__name__)
 load_dotenv('.env')
 
 def get_db(retries=3):
-    for _ in range(retries):
+    for i in range(retries):
         try:
             return mysql.connector.connect(
                 host=os.getenv('MYSQLHOST'),
@@ -20,8 +20,8 @@ def get_db(retries=3):
                 database=os.getenv('MYSQLDATABASE'),
                 connection_timeout=5
             )
-        except Error as e:
-            last_error = e
+        except:
+            print(f"Couldn't connect to Database. Attempt {i}/{retries}!")
             time.sleep(1)
 
 def createTables():
