@@ -1,4 +1,4 @@
-import time
+from time import sleep
 import uuid
 from flask import Flask, abort, request, jsonify
 import mysql.connector
@@ -21,7 +21,7 @@ def get_db(retries=3):
             )
         except:
             print(f"Couldn't connect to Database. Attempt {i}/{retries}!")
-            time.sleep(1)
+            sleep(1)
 
 def createTables():
     db = get_db()
