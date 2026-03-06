@@ -59,6 +59,16 @@ def user_exists(id: str) -> bool:
     return row is not None
 
 
+def email_in_use(email: str) -> bool:
+    db = get_db()
+    cur = db.cursor()
+    cur.execute('SELECT 1 FROM users WHERE email = %s', (email,))
+    row = cur.fetchone()
+    cur.close()
+    db.close()
+    return row is not None
+
+
 @app.route('/register', methods=['POST'])
 def register():
     email = request.json.get('email')
@@ -67,7 +77,22 @@ def register():
     # User exists already
     randomId = str(uuid.uuid4())
     if user_exists(randomId):
-        abort(404)
+        return jsonify({
+            'code': 400,
+            'message': 'A rare error occured! A user with this ID already exists!'
+        })
+
+    if not email or not password:
+        return jsonify({
+            'code': 400,
+            'message': 'Email and password are required!'
+        })
+    
+    if email_in_use(email):
+        return jsonify({
+            'code': 400,
+            'message': 'A user with this email already exists!'
+        })
 
     db = get_db()
     cur = db.cursor()
@@ -100,16 +125,23 @@ def login() -> str:
     db.close()
 
     if row is None:
-        abort(404)
+        return jsonify({
+            'code': 400,
+            'message': 'Invalid email or password!'
+        })
 
     return jsonify(row[0])
+
 
 
 @app.route('/stats/<id>', methods=['GET'])
 def fetch_stats(id: str):
 
     if not user_exists(id):
-        abort(404)
+        return jsonify({
+            'code': 400,
+            'message': 'Invalid user ID!'
+        })
 
     db = get_db()
     cur = db.cursor()
