@@ -100,6 +100,11 @@ def register():
         'INSERT INTO users (id, email, password) VALUES (%s, %s, %s)',
         (randomId, email, password)
     )
+
+    cur.execute(
+        'INSERT INTO stats (id, water, power, co2) VALUES (%s, %s, %s, %s)',
+        (randomId, 0, 0, 0)
+    )
     db.commit()
     cur.close()
     db.close()
