@@ -1,6 +1,6 @@
 from time import sleep
 import uuid
-from flask import Flask, abort, request, jsonify
+from flask import Flask, request, jsonify
 import mysql.connector
 import os
 from dotenv import load_dotenv
@@ -26,38 +26,23 @@ def get_db(retries=3):
 def createTables():
     db = get_db()
     cur = db.cursor()
-
-    cur.execute(
-        'CREATE TABLE IF NOT EXISTS users (id CHAR(36), email TEXT, password TEXT, PRIMARY KEY (id))'
-    )
-    cur.execute(
-        'CREATE TABLE IF NOT EXISTS stats (id CHAR(36), water INT, co2 INT, power INT, PRIMARY KEY (id), FOREIGN KEY (id) REFERENCES users(id))'
-    )
-    cur.execute(
-    'CREATE TABLE IF NOT EXISTS stat_history (entry_id INT AUTO_INCREMENT PRIMARY KEY,user_id CHAR(36), water INT DEFAULT 0,co2 INT DEFAULT 0,power INT DEFAULT 0,recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY (user_id) REFERENCES users(id)'
-    )
-
+    cur.execute('CREATE TABLE IF NOT EXISTS users (id CHAR(36) PRIMARY KEY, email TEXT, password TEXT)')
+    cur.execute('CREATE TABLE IF NOT EXISTS stats (id CHAR(36) PRIMARY KEY, water INT DEFAULT 0, co2 INT DEFAULT 0, power INT DEFAULT 0, FOREIGN KEY (id) REFERENCES users(id))')
+    cur.execute('CREATE TABLE IF NOT EXISTS stat_history (entry_id INT AUTO_INCREMENT PRIMARY KEY, user_id CHAR(36), water INT DEFAULT 0, co2 INT DEFAULT 0, power INT DEFAULT 0, recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id))')
     db.commit()
     cur.close()
     db.close()
-
-    return
 
 createTables()
 
 def user_exists(id: str) -> bool:
     db = get_db()
     cur = db.cursor()
-
     cur.execute('SELECT 1 FROM users WHERE id = %s', (id,))
     row = cur.fetchone()
-
-    # not sure if i can call #close() before checking result
     cur.close()
     db.close()
-
     return row is not None
-
 
 def email_in_use(email: str) -> bool:
     db = get_db()
@@ -68,75 +53,53 @@ def email_in_use(email: str) -> bool:
     db.close()
     return row is not None
 
+def row_to_dict(row):
+    if not row or row[0] is None:
+        return {'water': 0, 'co2': 0, 'power': 0}
+    return {'water': row[0], 'co2': row[1], 'power': row[2]}
+
 
 @app.route('/register', methods=['POST'])
 def register():
     email = request.json.get('email')
     password = request.json.get('password')
 
-    # User exists already
-    randomId = str(uuid.uuid4())
-    if user_exists(randomId):
-        return jsonify({
-            'code': 400,
-            'message': 'A rare error occured! A user with this ID already exists!'
-        }, 400)
-
     if not email or not password:
-        return jsonify({
-            'code': 400,
-            'message': 'Email and password are required!'
-        }, 400)
-    
+        return jsonify({'code': 400, 'message': 'Email and password are required!'}), 400
+
     if email_in_use(email):
-        return jsonify({
-            'code': 400,
-            'message': 'A user with this email already exists!'
-        }, 400)
+        return jsonify({'code': 400, 'message': 'A user with this email already exists!'}), 400
+
+    randomId = str(uuid.uuid4())
 
     db = get_db()
     cur = db.cursor()
-    cur.execute(
-        'INSERT INTO users (id, email, password) VALUES (%s, %s, %s)',
-        (randomId, email, password)
-    )
-
-    cur.execute(
-        'INSERT INTO stats (id, water, power, co2) VALUES (%s, %s, %s, %s)',
-        (randomId, 0, 0, 0)
-    )
+    cur.execute('INSERT INTO users (id, email, password) VALUES (%s, %s, %s)', (randomId, email, password))
+    cur.execute('INSERT INTO stats (id, water, co2, power) VALUES (%s, %s, %s, %s)', (randomId, 0, 0, 0))
     db.commit()
     cur.close()
     db.close()
 
-    # return the id so we can save it in local storage
     return jsonify(randomId)
 
 
 @app.route('/login', methods=['POST'])
-def login() -> str:
+def login():
     email = request.json.get('email')
     password = request.json.get('password')
 
     db = get_db()
     cur = db.cursor()
-    cur.execute(
-        'SELECT id FROM users WHERE password = %s AND email = %s',
-        (password, email)
-    )
-
+    cur.execute('SELECT id FROM users WHERE password = %s AND email = %s', (password, email))
     row = cur.fetchone()
-    print('Found user login!')
     cur.close()
     db.close()
 
     if row is None:
-        return jsonify({
-            'code': 400,
-            'message': 'Invalid email or password!'
-        }, 400)
-    print('Returning: ', jsonify(row[0]))
+        return jsonify({'code': 400, 'message': 'Invalid email or password!'}), 400
+
     return jsonify(row[0])
+
 
 @app.route('/stats/<id>/save', methods=['POST'])
 def save_stat(id: str):
@@ -149,19 +112,14 @@ def save_stat(id: str):
 
     db = get_db()
     cur = db.cursor()
-
-    # update individual users lifetime
     cur.execute(
         'UPDATE stats SET water = water + %s, co2 = co2 + %s, power = power + %s WHERE id = %s',
         (water, co2, power, id)
     )
-
-    # Add it to the history
     cur.execute(
         'INSERT INTO stat_history (user_id, water, co2, power) VALUES (%s, %s, %s, %s)',
         (id, water, co2, power)
     )
-
     db.commit()
     cur.close()
     db.close()
@@ -171,27 +129,36 @@ def save_stat(id: str):
 
 @app.route('/stats/<id>', methods=['GET'])
 def fetch_stats(id: str):
-
     if not user_exists(id):
-        return jsonify({
-            'code': 400,
-            'message': 'Invalid user ID!'
-        }, 400)
+        return jsonify({'code': 400, 'message': 'Invalid user ID!'}), 400
+
+    interval = request.args.get('interval')
+
+    valid_intervals = {
+        'weekly': '7 DAY',
+        'monthly': '1 MONTH',
+        'yearly': '1 YEAR',
+    }
+
+    if interval and interval not in valid_intervals:
+        return jsonify({'code': 400, 'message': f'Invalid interval. Choose from: {", ".join(valid_intervals.keys())}'}), 400
 
     db = get_db()
     cur = db.cursor()
-    cur.execute(
-        'SELECT water, power, co2 FROM stats WHERE id = %s',
-        (id,)
-    )
-    result = cur.fetchone()
 
+    if not interval:
+        cur.execute('SELECT water, co2, power FROM stats WHERE id = %s', (id,))
+    else:
+        cur.execute(
+            f'SELECT SUM(water), SUM(co2), SUM(power) FROM stat_history WHERE user_id = %s AND recorded_at >= NOW() - INTERVAL {valid_intervals[interval]}',
+            (id,)
+        )
+
+    result = cur.fetchone()
     cur.close()
     db.close()
 
-    while result is not None:
-        return {
-            "water": result[0],
-            "power": result[1],
-            "co2": result[2]
-        }
+    if result is None:
+        return jsonify({'code': 404, 'message': 'No stats found!'}), 404
+
+    return jsonify(row_to_dict(result))
