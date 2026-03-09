@@ -80,19 +80,19 @@ def register():
         return jsonify({
             'code': 400,
             'message': 'A rare error occured! A user with this ID already exists!'
-        })
+        }, 400)
 
     if not email or not password:
         return jsonify({
             'code': 400,
             'message': 'Email and password are required!'
-        })
+        }, 400)
     
     if email_in_use(email):
         return jsonify({
             'code': 400,
             'message': 'A user with this email already exists!'
-        })
+        }, 400)
 
     db = get_db()
     cur = db.cursor()
@@ -134,7 +134,7 @@ def login() -> str:
         return jsonify({
             'code': 400,
             'message': 'Invalid email or password!'
-        })
+        }, 400)
     print('Returning: ', jsonify(row[0]))
     return jsonify(row[0])
 
@@ -145,17 +145,17 @@ def save_stat(id: str, stat: str):
         return jsonify({
             'code': 400,
             'message': 'Value is required!'
-        })
+        }, 400)
     if not user_exists(id):
         return jsonify({
             'code': 400,
             'message': 'Invalid user ID!'
-        })
+        }, 400)
     if stat not in ['water', 'power', 'co2']:
         return jsonify({
             'code': 400,
             'message': 'Invalid stat!'
-        })
+        }, 400)
 
     db = get_db()
     cur = db.cursor()
@@ -188,7 +188,7 @@ def fetch_stats(id: str):
         return jsonify({
             'code': 400,
             'message': 'Invalid user ID!'
-        })
+        }, 400)
 
     db = get_db()
     cur = db.cursor()
