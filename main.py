@@ -34,7 +34,7 @@ def createTables():
         'CREATE TABLE IF NOT EXISTS stats (id CHAR(36), water INT, co2 INT, power INT, PRIMARY KEY (id), FOREIGN KEY (id) REFERENCES users(id))'
     )
     cur.execute(
-        'CREATE TABLE IF NOT EXISTS saved_stats (id CHAR(36), water INT, co2 INT, power INT, PRIMARY KEY (id), FOREIGN KEY (id) REFERENCES users(id))'
+    'CREATE TABLE IF NOT EXISTS stat_history (entry_id INT AUTO_INCREMENT PRIMARY KEY,user_id CHAR(36), water INT DEFAULT 0,co2 INT DEFAULT 0,power INT DEFAULT 0,recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY (user_id) REFERENCES users(id)'
     )
 
     db.commit()
@@ -138,48 +138,36 @@ def login() -> str:
     print('Returning: ', jsonify(row[0]))
     return jsonify(row[0])
 
-@app.route('/stats/<id>/<stat>/save', methods=['POST'])
-def save_stat(id: str, stat: str):
-    value = request.json.get('value')
-    if not value:
-        return jsonify({
-            'code': 400,
-            'message': 'Value is required!'
-        }, 400)
+@app.route('/stats/<id>/save', methods=['POST'])
+def save_stat(id: str):
+    water = request.json.get('water', 0)
+    co2 = request.json.get('co2', 0)
+    power = request.json.get('power', 0)
+
     if not user_exists(id):
-        return jsonify({
-            'code': 400,
-            'message': 'Invalid user ID!'
-        }, 400)
-    if stat not in ['water', 'power', 'co2']:
-        return jsonify({
-            'code': 400,
-            'message': 'Invalid stat!'
-        }, 400)
+        return jsonify({'code': 400, 'message': 'Invalid user ID!'}), 400
 
     db = get_db()
     cur = db.cursor()
-    # updates the users lifetime stats
+
+    # update individual users lifetime
     cur.execute(
-        'UPDATE stats SET %s = %s WHERE id = %s',
-        (stat, value, id)
+        'UPDATE stats SET water = water + %s, co2 = co2 + %s, power = power + %s WHERE id = %s',
+        (water, co2, power, id)
     )
 
-    # a big part of the project is having a timeline of stats being saved so we can get
-    # the weekly, monthly, yearly, etc. averages of the stats
-
+    # Add it to the history
     cur.execute(
-        'INSERT INTO saved_stats (id, water, power, co2) VALUES (%s, %s, %s, %s)',
-        (id, value, 0, 0)
+        'INSERT INTO stat_history (user_id, water, co2, power) VALUES (%s, %s, %s, %s)',
+        (id, water, co2, power)
     )
+
     db.commit()
     cur.close()
     db.close()
 
-    return jsonify({
-        'code': 200,
-        'message': 'Stat saved successfully!'
-    })
+    return jsonify({'code': 200, 'message': 'Stats saved!'})
+
 
 @app.route('/stats/<id>', methods=['GET'])
 def fetch_stats(id: str):
