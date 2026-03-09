@@ -126,6 +126,7 @@ def login() -> str:
     )
 
     row = cur.fetchone()
+    print('Found user login!')
     cur.close()
     db.close()
 
@@ -134,10 +135,51 @@ def login() -> str:
             'code': 400,
             'message': 'Invalid email or password!'
         })
-
+    print('Returning: ', jsonify(row[0]))
     return jsonify(row[0])
 
+@app.route('/stats/<id>/<stat>/save', methods=['POST'])
+def save_stat(id: str, stat: str):
+    value = request.json.get('value')
+    if not value:
+        return jsonify({
+            'code': 400,
+            'message': 'Value is required!'
+        })
+    if not user_exists(id):
+        return jsonify({
+            'code': 400,
+            'message': 'Invalid user ID!'
+        })
+    if stat not in ['water', 'power', 'co2']:
+        return jsonify({
+            'code': 400,
+            'message': 'Invalid stat!'
+        })
 
+    db = get_db()
+    cur = db.cursor()
+    # updates the users lifetime stats
+    cur.execute(
+        'UPDATE stats SET %s = %s WHERE id = %s',
+        (stat, value, id)
+    )
+
+    # a big part of the project is having a timeline of stats being saved so we can get
+    # the weekly, monthly, yearly, etc. averages of the stats
+
+    cur.execute(
+        'INSERT INTO saved_stats (id, water, power, co2) VALUES (%s, %s, %s, %s)',
+        (id, value, 0, 0)
+    )
+    db.commit()
+    cur.close()
+    db.close()
+
+    return jsonify({
+        'code': 200,
+        'message': 'Stat saved successfully!'
+    })
 
 @app.route('/stats/<id>', methods=['GET'])
 def fetch_stats(id: str):
