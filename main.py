@@ -61,6 +61,9 @@ def row_to_dict(row):
         return {'prompts': 0, 'water': 0, 'co2': 0, 'power': 0}
     return {'prompts': row[0], 'water': row[1], 'co2': row[2], 'power': row[3]}
 
+@app.route('/health', methods=["GET"])
+def health():
+    return jsonify({'status': 'ok'})
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -102,6 +105,8 @@ def login():
         return jsonify({'code': 400, 'message': 'Invalid email or password!'}), 400
 
     return jsonify(row[0])
+
+
 
 
 @app.route('/stats/<id>/save', methods=['POST'])
