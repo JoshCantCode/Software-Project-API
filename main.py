@@ -130,6 +130,36 @@ def save_stat(id: str):
     return jsonify({'code': 200, 'message': 'Stats saved!'})
 
 
+@app.route('/stats/worldwide', methods=['GET'])
+def worldwide_stats():
+    interval = request.args.get('interval')
+
+    valid_intervals = {
+        'today': '1 DAY',
+        'weekly': '7 DAY',
+        'monthly': '1 MONTH',
+        'yearly': '1 YEAR',
+    }
+
+    db = get_db()
+    cur = db.cursor()
+
+    if not interval:
+        cur.execute('SELECT SUM(water), SUM(co2), SUM(power) FROM stats')
+    else:
+        if interval not in valid_intervals:
+            return jsonify({'code': 400, 'message': f'Invalid interval.'}), 400
+        cur.execute(
+            f'SELECT SUM(water), SUM(co2), SUM(power) FROM stat_history WHERE recorded_at >= NOW() - INTERVAL {valid_intervals[interval]}',
+        )
+
+    result = cur.fetchone()
+    cur.close()
+    db.close()
+
+    return jsonify(row_to_dict(result))
+
+
 @app.route('/stats/<id>', methods=['GET'])
 def fetch_stats(id: str):
     if not user_exists(id):
