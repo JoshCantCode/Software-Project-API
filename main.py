@@ -138,6 +138,7 @@ def fetch_stats(id: str):
     interval = request.args.get('interval')
 
     valid_intervals = {
+        'today': '1 DAY',
         'weekly': '7 DAY',
         'monthly': '1 MONTH',
         'yearly': '1 YEAR',
