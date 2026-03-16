@@ -30,8 +30,8 @@ def createTables():
     db = get_db()
     cur = db.cursor()
     cur.execute('CREATE TABLE IF NOT EXISTS users (id CHAR(36) PRIMARY KEY, email TEXT, password TEXT)')
-    cur.execute('CREATE TABLE IF NOT EXISTS stats (id CHAR(36) PRIMARY KEY, water INT DEFAULT 0, co2 INT DEFAULT 0, power INT DEFAULT 0, FOREIGN KEY (id) REFERENCES users(id))')
-    cur.execute('CREATE TABLE IF NOT EXISTS stat_history (entry_id INT AUTO_INCREMENT PRIMARY KEY, user_id CHAR(36), water INT DEFAULT 0, co2 INT DEFAULT 0, power INT DEFAULT 0, recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id))')
+    cur.execute('CREATE TABLE IF NOT EXISTS stats (id CHAR(36) PRIMARY KEY, prompts INT DEFAULT 0, water INT DEFAULT 0, co2 INT DEFAULT 0, power INT DEFAULT 0, FOREIGN KEY (id) REFERENCES users(id))')
+    cur.execute('CREATE TABLE IF NOT EXISTS stat_history (entry_id INT AUTO_INCREMENT PRIMARY KEY, user_id CHAR(36), prompts INT DEFAULT 0, water INT DEFAULT 0, co2 INT DEFAULT 0, power INT DEFAULT 0, recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id))')
     db.commit()
     cur.close()
     db.close()
@@ -58,8 +58,8 @@ def email_in_use(email: str) -> bool:
 
 def row_to_dict(row):
     if not row or row[0] is None:
-        return {'water': 0, 'co2': 0, 'power': 0}
-    return {'water': row[0], 'co2': row[1], 'power': row[2]}
+        return {'prompts': 0, 'water': 0, 'co2': 0, 'power': 0}
+    return {'prompts': row[0], 'water': row[1], 'co2': row[2], 'power': row[3]}
 
 
 @app.route('/register', methods=['POST'])
@@ -78,7 +78,7 @@ def register():
     db = get_db()
     cur = db.cursor()
     cur.execute('INSERT INTO users (id, email, password) VALUES (%s, %s, %s)', (randomId, email, password))
-    cur.execute('INSERT INTO stats (id, water, co2, power) VALUES (%s, %s, %s, %s)', (randomId, 0, 0, 0))
+    cur.execute('INSERT INTO stats (id, prompts, water, co2, power) VALUES (%s, %s, %s, %s, %s)', (randomId, 0, 0, 0, 0))
     db.commit()
     cur.close()
     db.close()
@@ -106,6 +106,7 @@ def login():
 
 @app.route('/stats/<id>/save', methods=['POST'])
 def save_stat(id: str):
+    prompts = request.json.get('prompts', 0)
     water = request.json.get('water', 0)
     co2 = request.json.get('co2', 0)
     power = request.json.get('power', 0)
@@ -116,12 +117,12 @@ def save_stat(id: str):
     db = get_db()
     cur = db.cursor()
     cur.execute(
-        'UPDATE stats SET water = water + %s, co2 = co2 + %s, power = power + %s WHERE id = %s',
-        (water, co2, power, id)
+        'UPDATE stats SET prompts = prompts + %s, water = water + %s, co2 = co2 + %s, power = power + %s WHERE id = %s',
+        (prompts, water, co2, power, id)
     )
     cur.execute(
-        'INSERT INTO stat_history (user_id, water, co2, power) VALUES (%s, %s, %s, %s)',
-        (id, water, co2, power)
+        'INSERT INTO stat_history (user_id, prompts, water, co2, power) VALUES (%s, %s, %s, %s, %s)',
+        (id, prompts, water, co2, power)
     )
     db.commit()
     cur.close()
@@ -145,12 +146,12 @@ def worldwide_stats():
     cur = db.cursor()
 
     if not interval:
-        cur.execute('SELECT SUM(water), SUM(co2), SUM(power) FROM stats')
+        cur.execute('SELECT SUM(prompts), SUM(water), SUM(co2), SUM(power) FROM stats')
     else:
         if interval not in valid_intervals:
-            return jsonify({'code': 400, 'message': f'Invalid interval.'}), 400
+            return jsonify({'code': 400, 'message': 'Invalid interval.'}), 400
         cur.execute(
-            f'SELECT SUM(water), SUM(co2), SUM(power) FROM stat_history WHERE recorded_at >= NOW() - INTERVAL {valid_intervals[interval]}',
+            f'SELECT SUM(prompts), SUM(water), SUM(co2), SUM(power) FROM stat_history WHERE recorded_at >= NOW() - INTERVAL {valid_intervals[interval]}'
         )
 
     result = cur.fetchone()
@@ -181,10 +182,10 @@ def fetch_stats(id: str):
     cur = db.cursor()
 
     if not interval:
-        cur.execute('SELECT water, co2, power FROM stats WHERE id = %s', (id,))
+        cur.execute('SELECT prompts, water, co2, power FROM stats WHERE id = %s', (id,))
     else:
         cur.execute(
-            f'SELECT SUM(water), SUM(co2), SUM(power) FROM stat_history WHERE user_id = %s AND recorded_at >= NOW() - INTERVAL {valid_intervals[interval]}',
+            f'SELECT SUM(prompts), SUM(water), SUM(co2), SUM(power) FROM stat_history WHERE user_id = %s AND recorded_at >= NOW() - INTERVAL {valid_intervals[interval]}',
             (id,)
         )
 
