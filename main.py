@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 app = Flask(__name__)
 load_dotenv('.env')
 
+print('one last time?')
 
 def get_db(retries=3):
     last_error = None
