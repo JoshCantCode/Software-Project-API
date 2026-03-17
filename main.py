@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 app = Flask(__name__)
 load_dotenv('.env')
 
-
+#fff
 
 def get_db(retries=3):
     last_error = None
