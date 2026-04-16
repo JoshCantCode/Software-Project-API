@@ -9,7 +9,7 @@ app = Flask(__name__)
 def ensure_tables():
     if not hasattr(app, "_tables_created"):
         db.create_tables(db.get_db())
-        app._tables_created = True
+        app._tables_created = True  # ty:ignore[invalid-assignment]
 
 
 @app.route("/health", methods=["GET"])
@@ -127,8 +127,6 @@ def save_stat(id: str):
 
 @app.route("/stats/worldwide", methods=["GET"])
 def worldwide_stats():
-    interval = request.args.get("interval")
-
     valid_intervals = {
         "today": "1 DAY",
         "weekly": "7 DAY",
@@ -139,82 +137,90 @@ def worldwide_stats():
     db_conn = db.get_db()
     cur = db_conn.cursor()
 
-    if not interval:
+    if db.is_testing():
         cur.execute("SELECT SUM(prompts), SUM(water), SUM(co2), SUM(power) FROM stats")
     else:
-        if interval not in valid_intervals:
-            cur.close()
-            db.close_db(db_conn)
-            return jsonify({"code": 400, "message": "Invalid interval."}), 400
+        cur.execute("SELECT SUM(prompts), SUM(water), SUM(co2), SUM(power) FROM stats")
+
+    total_result = cur.fetchone()
+
+    history_results = {}
+    for interval_name, interval_value in valid_intervals.items():
+        days = interval_value.split()[0]
         if db.is_testing():
             cur.execute(
-                f'SELECT SUM(prompts), SUM(water), SUM(co2), SUM(power) FROM stat_history WHERE recorded_at >= datetime("now", "-{valid_intervals[interval].split()[0]} days")',
+                f'SELECT SUM(prompts), SUM(water), SUM(co2), SUM(power) FROM stat_history WHERE recorded_at >= datetime("now", "-{days} days")',
             )
         else:
             cur.execute(
-                f"SELECT SUM(prompts), SUM(water), SUM(co2), SUM(power) FROM stat_history WHERE recorded_at >= NOW() - INTERVAL {valid_intervals[interval]}"
+                f"SELECT SUM(prompts), SUM(water), SUM(co2), SUM(power) FROM stat_history WHERE recorded_at >= NOW() - INTERVAL {interval_value}"
             )
+        history_results[interval_name] = db.row_to_dict(cur.fetchone())
 
-    result = cur.fetchone()
     cur.close()
     db.close_db(db_conn)
 
-    return jsonify(db.row_to_dict(result))
+    return jsonify(
+        {
+            "total": db.row_to_dict(total_result),
+            "today": history_results["today"],
+            "weekly": history_results["weekly"],
+            "monthly": history_results["monthly"],
+            "yearly": history_results["yearly"],
+        }
+    )
 
 
 @app.route("/stats/<id>", methods=["GET"])
 def fetch_stats(id: str):
+    valid_intervals = {
+        "today": "1 DAY",
+        "weekly": "7 DAY",
+        "monthly": "1 MONTH",
+        "yearly": "1 YEAR",
+    }
+
     db_conn = db.get_db()
     if not db.user_exists(db_conn, id):
         db.close_db(db_conn)
         return jsonify({"code": 400, "message": "Invalid user ID!"}), 400
 
-    interval = request.args.get("interval")
-
-    valid_intervals = {
-        "today": "1 DAY",
-        "weekly": "7 DAY",
-        "monthly": "1 MONTH",
-        "yearly": "1 YEAR",
-    }
-
-    if interval and interval not in valid_intervals:
-        db.close_db(db_conn)
-        return jsonify(
-            {
-                "code": 400,
-                "message": f"Invalid interval. Choose from: {', '.join(valid_intervals.keys())}",
-            }
-        ), 400
-
     cur = db_conn.cursor()
 
-    if not interval:
-        if db.is_testing():
-            cur.execute(
-                "SELECT prompts, water, co2, power FROM stats WHERE id = ?", (id,)
-            )
-        else:
-            cur.execute(
-                "SELECT prompts, water, co2, power FROM stats WHERE id = %s", (id,)
-            )
+    if db.is_testing():
+        cur.execute("SELECT prompts, water, co2, power FROM stats WHERE id = ?", (id,))
     else:
+        cur.execute("SELECT prompts, water, co2, power FROM stats WHERE id = %s", (id,))
+
+    total_result = cur.fetchone()
+
+    history_results = {}
+    for interval_name, interval_value in valid_intervals.items():
+        days = interval_value.split()[0]
         if db.is_testing():
             cur.execute(
-                f'SELECT SUM(prompts), SUM(water), SUM(co2), SUM(power) FROM stat_history WHERE user_id = ? AND recorded_at >= datetime("now", "-{valid_intervals[interval].split()[0]} days")',
+                f'SELECT SUM(prompts), SUM(water), SUM(co2), SUM(power) FROM stat_history WHERE user_id = ? AND recorded_at >= datetime("now", "-{days} days")',
                 (id,),
             )
         else:
             cur.execute(
-                f"SELECT SUM(prompts), SUM(water), SUM(co2), SUM(power) FROM stat_history WHERE user_id = %s AND recorded_at >= NOW() - INTERVAL {valid_intervals[interval]}",
+                f"SELECT SUM(prompts), SUM(water), SUM(co2), SUM(power) FROM stat_history WHERE user_id = %s AND recorded_at >= NOW() - INTERVAL {interval_value}",
                 (id,),
             )
+        history_results[interval_name] = db.row_to_dict(cur.fetchone())
 
-    result = cur.fetchone()
     cur.close()
     db.close_db(db_conn)
 
-    if result is None:
+    if total_result is None:
         return jsonify({"code": 404, "message": "No stats found!"}), 404
 
-    return jsonify(db.row_to_dict(result))
+    return jsonify(
+        {
+            "total": db.row_to_dict(total_result),
+            "today": history_results["today"],
+            "weekly": history_results["weekly"],
+            "monthly": history_results["monthly"],
+            "yearly": history_results["yearly"],
+        }
+    )

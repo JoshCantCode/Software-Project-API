@@ -37,10 +37,10 @@ def test_save_and_fetch_stats(client):
     fetch_response = client.get(f"/stats/{user_id}")
     assert fetch_response.status_code == 200
     data = fetch_response.get_json()
-    assert data["prompts"] == 10
-    assert data["water"] == 5
-    assert data["co2"] == 3
-    assert data["power"] == 2
+    assert data["total"]["prompts"] == 10
+    assert data["total"]["water"] == 5
+    assert data["total"]["co2"] == 3
+    assert data["total"]["power"] == 2
 
 
 def test_save_stat_accumulates(client):
@@ -64,35 +64,14 @@ def test_save_stat_accumulates(client):
 
     fetch_response = client.get(f"/stats/{user_id}")
     data = fetch_response.get_json()
-    assert data["prompts"] == 8
+    assert data["total"]["prompts"] == 8
 
 
 def test_worldwide_stats_empty(client):
     response = client.get("/stats/worldwide")
     assert response.status_code == 200
     data = response.get_json()
-    assert data["prompts"] == 0
-    assert data["water"] == 0
-    assert data["co2"] == 0
-    assert data["power"] == 0
-
-
-def test_fetch_stats_invalid_interval(client):
-    register_response = client.post(
-        "/register",
-        data=json.dumps({"email": "interval@example.com", "password": "pass"}),
-        content_type="application/json",
-    )
-    user_id = register_response.get_json()
-
-    response = client.get(f"/stats/{user_id}?interval=invalid")
-    assert response.status_code == 400
-    data = response.get_json()
-    assert "Invalid interval" in data["message"]
-
-
-def test_worldwide_stats_invalid_interval(client):
-    response = client.get("/stats/worldwide?interval=invalid")
-    assert response.status_code == 400
-    data = response.get_json()
-    assert "Invalid interval" in data["message"]
+    assert data["total"]["prompts"] == 0
+    assert data["total"]["water"] == 0
+    assert data["total"]["co2"] == 0
+    assert data["total"]["power"] == 0

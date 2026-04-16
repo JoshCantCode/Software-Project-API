@@ -29,11 +29,11 @@ def reset_test_db():
     if _test_db is None:
         init_test_db()
     try:
-        cur = _test_db.cursor()
+        cur = _test_db.cursor()  # ty:ignore[unresolved-attribute]
         cur.execute("DELETE FROM stat_history")
         cur.execute("DELETE FROM stats")
         cur.execute("DELETE FROM users")
-        _test_db.commit()
+        _test_db.commit()  # ty:ignore[unresolved-attribute]
         cur.close()
     except sqlite3.ProgrammingError:
         init_test_db()
