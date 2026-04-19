@@ -19,7 +19,7 @@ app = main()
 @app.before_request
 def ensure_tables():
     if not hasattr(app, "_tables_created"):
-        db.create_tables(db.get_db())
+        # db.create_tables(db.get_db())
         app._tables_created = True  # ty:ignore[invalid-assignment]
 
 
