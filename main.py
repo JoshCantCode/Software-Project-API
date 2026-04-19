@@ -5,8 +5,15 @@ from flask_cors import CORS
 
 import db
 
-app = Flask(__name__)
-CORS(app)
+
+def main():
+    app = Flask(__name__)
+    CORS(app)
+
+    return app
+
+
+app = main()
 
 
 @app.before_request
